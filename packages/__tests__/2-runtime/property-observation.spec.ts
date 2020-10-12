@@ -56,12 +56,6 @@ describe('PrimitiveObserver', function () {
       new PrimitiveObserver(null, 0).unsubscribe();
     });
   });
-
-  describe('doNotCache', function () {
-    it('is true', function () {
-      assert.strictEqual(new PrimitiveObserver(null, 0).doNotCache, true, `new PrimitiveObserver(null, 0).doNotCache`);
-    });
-  });
 });
 
 class Foo {}

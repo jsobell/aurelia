@@ -2,7 +2,6 @@ import { IIndexable } from '@aurelia/kernel';
 import {
   IAccessor,
   LifecycleFlags,
-  IScheduler,
   ITask,
   AccessorType,
 } from '@aurelia/runtime';
@@ -15,50 +14,18 @@ import {
  * @see DataAttributeAccessor
  */
 export class ElementPropertyAccessor implements IAccessor {
-  public currentValue: unknown = void 0;
-  public oldValue: unknown = void 0;
-
-  public readonly persistentFlags: LifecycleFlags;
-
-  public hasChanges: boolean = false;
   public task: ITask | null = null;
   // ObserverType.Layout is not always true, it depends on the property
   // but for simplicity, always treat as such
   public type: AccessorType = AccessorType.Node | AccessorType.Layout;
 
-  public constructor(
-    public readonly scheduler: IScheduler,
-    flags: LifecycleFlags,
-    public readonly obj: Node & IIndexable,
-    public readonly propertyKey: string,
-  ) {
-    this.persistentFlags = flags & LifecycleFlags.targetObserverFlags;
+  public getValue(obj: HTMLElement, key: string): unknown {
+    return (obj as IIndexable<HTMLElement>)[key]
   }
 
-  public getValue(): unknown {
-    // is it safe to assume the observer has the latest value?
-    // todo: ability to turn on/off cache based on type
-    return this.currentValue;
-  }
-
-  public setValue(newValue: string | null, flags: LifecycleFlags): void {
-    this.currentValue = newValue;
-    this.hasChanges = newValue !== this.oldValue;
-    if ((flags & LifecycleFlags.noTargetObserverQueue) === 0) {
-      this.flushChanges(flags);
-    }
-  }
-
-  public flushChanges(flags: LifecycleFlags): void {
-    if (this.hasChanges) {
-      this.hasChanges = false;
-      const currentValue = this.currentValue;
-      this.oldValue = currentValue;
-      this.obj[this.propertyKey] = currentValue;
-    }
-  }
-
-  public bind(flags: LifecycleFlags): void {
-    this.currentValue = this.oldValue = this.obj[this.propertyKey];
+  public setValue(newValue: unknown, flags: LifecycleFlags, obj: HTMLElement, key: string): void {
+    (obj as IIndexable<HTMLElement>)[key] = newValue;
   }
 }
+
+export const elementPropertyAccessor = new ElementPropertyAccessor();

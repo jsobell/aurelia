@@ -120,16 +120,24 @@ export class PropertyBinding implements IPartialConnectableBinding {
 
       // todo(fred): maybe let the obsrever decides whether it updates
       if (newValue !== oldValue) {
+        let isFlushable = 'flushChanges' in targetObserver;
+
         if (shouldQueueFlush) {
           flags |= LifecycleFlags.noTargetObserverQueue;
           this.task?.cancel();
           this.task = this.$scheduler.queueRenderTask(() => {
-            (targetObserver as Partial<INodeAccessor>).flushChanges?.(flags);
+            if (isFlushable) {
+              (targetObserver as Partial<INodeAccessor>).flushChanges!(flags);
+            } else {
+              interceptor.updateTarget(newValue, flags);
+            }
             this.task = null;
           }, updateTaskOpts);
         }
 
-        interceptor.updateTarget(newValue, flags);
+        if (isFlushable) {
+          interceptor.updateTarget(newValue, flags);
+        }
       }
 
       return;

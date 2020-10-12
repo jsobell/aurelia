@@ -15,7 +15,6 @@ export class ClassAttributeAccessor implements IAccessor {
 
   public readonly persistentFlags: LifecycleFlags;
 
-  public readonly doNotCache: true = true;
   public nameIndex: Record<string, number> = {};
   public version: number = 0;
 

@@ -3,7 +3,6 @@ import { IAccessor, ISubscribable, AccessorType } from '../observation';
 import { ITask } from '@aurelia/scheduler';
 
 export class PrimitiveObserver implements IAccessor, ISubscribable {
-  public get doNotCache(): true { return true; }
   public type: AccessorType = AccessorType.None;
   public task: ITask | null = null;
 

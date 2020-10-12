@@ -1,8 +1,6 @@
-
 import { IContainer, IResolver, Registration, IIndexable } from '@aurelia/kernel';
 import {
   IBindingTargetAccessor,
-  IBindingTargetObserver,
   IDOM,
   ILifecycle,
   IObserverLocator,
@@ -10,13 +8,15 @@ import {
   ITargetObserverLocator,
   LifecycleFlags,
   SetterObserver,
-  IScheduler
+  IScheduler,
+  AccessorOrObserver,
+  IObservable
 } from '@aurelia/runtime';
 import { AttributeNSAccessor } from './attribute-ns-accessor';
 import { CheckedObserver, IInputElement } from './checked-observer';
 import { ClassAttributeAccessor } from './class-attribute-accessor';
-import { DataAttributeAccessor } from './data-attribute-accessor';
-import { ElementPropertyAccessor } from './element-property-accessor';
+import { dataAttributeAccessor } from './data-attribute-accessor';
+import { elementPropertyAccessor } from './element-property-accessor';
 import { EventSubscriber } from './event-manager';
 import { ISelectElement, SelectValueObserver } from './select-value-observer';
 import { StyleAttributeAccessor } from './style-attribute-accessor';
@@ -93,40 +93,41 @@ export class TargetObserverLocator implements ITargetObserverLocator {
     lifecycle: ILifecycle,
     observerLocator: IObserverLocator,
     obj: Node,
-    propertyName: string,
-  ): IBindingTargetObserver | IBindingTargetAccessor | null {
-    switch (propertyName) {
+    key: string,
+  ): AccessorOrObserver | null {
+    switch (key) {
       case 'checked':
-        return new CheckedObserver(scheduler, flags, lifecycle, new EventSubscriber(this.dom, inputEvents), obj as IInputElement);
+        return this.cache(obj, key, new CheckedObserver(scheduler, flags, lifecycle, new EventSubscriber(this.dom, inputEvents), obj as IInputElement));
       case 'value':
         if ((obj as Element).tagName === 'SELECT') {
-          return new SelectValueObserver(scheduler, flags, observerLocator, this.dom, new EventSubscriber(this.dom, selectEvents), obj as ISelectElement);
+          return this.cache(obj, key, new SelectValueObserver(scheduler, flags, observerLocator, this.dom, new EventSubscriber(this.dom, selectEvents), obj as ISelectElement));
         }
-        return new ValueAttributeObserver(scheduler, flags, new EventSubscriber(this.dom, inputEvents), obj as Node & IIndexable, propertyName);
+        return this.cache(obj, key, new ValueAttributeObserver(scheduler, flags, new EventSubscriber(this.dom, inputEvents), obj as Node & IIndexable, key));
       case 'files':
-        return new ValueAttributeObserver(scheduler, flags, new EventSubscriber(this.dom, inputEvents), obj as Node & IIndexable, propertyName);
+        return this.cache(obj, key, new ValueAttributeObserver(scheduler, flags, new EventSubscriber(this.dom, inputEvents), obj as Node & IIndexable, key));
       case 'textContent':
       case 'innerHTML':
-        return new ValueAttributeObserver(scheduler, flags, new EventSubscriber(this.dom, contentEvents), obj as Node & IIndexable, propertyName);
+        return this.cache(obj, key, new ValueAttributeObserver(scheduler, flags, new EventSubscriber(this.dom, contentEvents), obj as Node & IIndexable, key));
       case 'scrollTop':
       case 'scrollLeft':
-        return new ValueAttributeObserver(scheduler, flags, new EventSubscriber(this.dom, scrollEvents), obj as Node & IIndexable, propertyName);
+        return this.cache(obj, key, new ValueAttributeObserver(scheduler, flags, new EventSubscriber(this.dom, scrollEvents), obj as Node & IIndexable, key));
       case 'class':
-        return new ClassAttributeAccessor(scheduler, flags, obj as HTMLElement);
+        // do not cache
+        return this.cache(obj, key, new ClassAttributeAccessor(scheduler, flags, obj as HTMLElement));
       case 'style':
       case 'css':
-        return new StyleAttributeAccessor(scheduler, flags, obj as HTMLElement);
+        return this.cache(obj, key, new StyleAttributeAccessor(scheduler, flags, obj as HTMLElement));
       case 'model':
-        return new SetterObserver(flags, obj as Node & IIndexable, propertyName);
+        return this.cache(obj, key, new SetterObserver(flags, obj as Node & IIndexable, key));
       case 'role':
-        return new DataAttributeAccessor(scheduler, flags, obj as HTMLElement, propertyName);
+        return dataAttributeAccessor as AccessorOrObserver;
       default:
-        if (nsAttributes[propertyName] !== undefined) {
-          const nsProps = nsAttributes[propertyName];
-          return new AttributeNSAccessor(scheduler, flags, obj as HTMLElement, nsProps[0], nsProps[1]);
+        if (nsAttributes[key] !== undefined) {
+          const nsProps = nsAttributes[key];
+          return this.cache(obj, key, new AttributeNSAccessor(scheduler, flags, obj as HTMLElement, nsProps[0], nsProps[1]));
         }
-        if (isDataAttribute(obj, propertyName, this.svgAnalyzer)) {
-          return new DataAttributeAccessor(scheduler, flags, obj as HTMLElement, propertyName);
+        if (isDataAttribute(obj, key, this.svgAnalyzer)) {
+          return dataAttributeAccessor as AccessorOrObserver;
         }
     }
     return null!;
@@ -142,6 +143,14 @@ export class TargetObserverLocator implements ITargetObserverLocator {
   // This default implementation only accounts for the most common target scenarios
   public handles(flags: LifecycleFlags, obj: unknown): boolean {
     return this.dom.isNodeInstance(obj);
+  }
+
+  private cache(obj: Node, key: string, observer: AccessorOrObserver): AccessorOrObserver {
+    if ((obj as IObservable<Node>).$observers === void 0) {
+      Reflect.defineProperty(obj, '$observers', { value: { [key]: observer } });
+      return observer;
+    }
+    return (obj as IObservable<Node>).$observers![key] = observer;
   }
 }
 
@@ -160,38 +169,43 @@ export class TargetAccessorLocator implements ITargetAccessorLocator {
     scheduler: IScheduler,
     lifecycle: ILifecycle,
     obj: Node,
-    propertyName: string,
+    key: string,
   ): IBindingTargetAccessor {
-    switch (propertyName) {
-      case 'textContent':
-        // note: this case is just an optimization (textContent is the most often used property)
-        return new ElementPropertyAccessor(scheduler, flags, obj as Node & IIndexable, propertyName);
+    switch (key) {
       case 'class':
         return new ClassAttributeAccessor(scheduler, flags, obj as HTMLElement);
       case 'style':
       case 'css':
-        return new StyleAttributeAccessor(scheduler, flags, obj as HTMLElement);
+        return this.cache(obj, key, new StyleAttributeAccessor(scheduler, flags, obj as HTMLElement));
       // TODO: there are (many) more situation where we want to default to DataAttributeAccessor,
       // but for now stick to what vCurrent does
       case 'src':
       case 'href':
       // https://html.spec.whatwg.org/multipage/dom.html#wai-aria
       case 'role':
-        return new DataAttributeAccessor(scheduler, flags, obj as HTMLElement, propertyName);
+        return dataAttributeAccessor as AccessorOrObserver;
       default:
-        if (nsAttributes[propertyName] !== undefined) {
-          const nsProps = nsAttributes[propertyName];
-          return new AttributeNSAccessor(scheduler, flags, obj as HTMLElement, nsProps[0], nsProps[1]);
+        if (nsAttributes[key] !== undefined) {
+          const nsProps = nsAttributes[key];
+          return this.cache(obj, key, new AttributeNSAccessor(scheduler, flags, obj as HTMLElement, nsProps[0], nsProps[1]));
         }
-        if (isDataAttribute(obj, propertyName, this.svgAnalyzer)) {
-          return new DataAttributeAccessor(scheduler, flags, obj as HTMLElement, propertyName);
+        if (isDataAttribute(obj, key, this.svgAnalyzer)) {
+          return dataAttributeAccessor as AccessorOrObserver;
         }
-        return new ElementPropertyAccessor(scheduler, flags, obj as Node & IIndexable, propertyName);
+        return elementPropertyAccessor as AccessorOrObserver;
     }
   }
 
   public handles(flags: LifecycleFlags, obj: Node): boolean {
     return this.dom.isNodeInstance(obj);
+  }
+
+  private cache(obj: Node, key: string, observer: AccessorOrObserver): AccessorOrObserver {
+    if ((obj as IObservable<Node>).$observers === void 0) {
+      Reflect.defineProperty(obj, '$observers', { value: { [key]: observer } });
+      return observer;
+    }
+    return (obj as IObservable<Node>).$observers![key] = observer;
   }
 }
 

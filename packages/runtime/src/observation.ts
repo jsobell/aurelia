@@ -259,9 +259,7 @@ export interface IBindingTargetObserver<
   ISubscribable,
   ISubscriberCollection {}
 
-export type AccessorOrObserver = (IBindingTargetAccessor | IBindingTargetObserver) & {
-  doNotCache?: boolean;
-};
+export type AccessorOrObserver = IBindingTargetAccessor | IBindingTargetObserver;
 
 /**
  * An array of indices, where the index of an element represents the index to map FROM, and the numeric value of the element itself represents the index to map TO

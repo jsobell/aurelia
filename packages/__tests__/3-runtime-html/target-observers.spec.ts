@@ -88,15 +88,13 @@ describe('DataAttributeAccessor', function () {
         it(`returns "${value}" for attribute "${name}"`, function () {
           const ctx = TestContext.createHTMLTestContext();
           el = ctx.createElementFromMarkup(`<div ${name}="${value}"></div>`);
-          const { scheduler: $scheduler } = createFixture();
-          scheduler = $scheduler;
-          sut = new DataAttributeAccessor(scheduler, LifecycleFlags.none, el, name);
+          sut = new DataAttributeAccessor();
 
-          let actual = sut.getValue();
+          let actual = sut.getValue(el, name);
           assert.strictEqual(actual, null, `actual`);
 
-          sut.bind(LifecycleFlags.none);
-          actual = sut.getValue();
+          sut.setValue(value, LifecycleFlags.none, el, name);
+          actual = sut.getValue(el, name);
           assert.strictEqual(actual, value, `actual`);
         });
       }
@@ -108,13 +106,10 @@ describe('DataAttributeAccessor', function () {
       it(`sets attribute "${name}" to "${value}" only after flushing RAF`, function () {
         const ctx = TestContext.createHTMLTestContext();
         el = ctx.createElementFromMarkup(`<div></div>`);
-        const { scheduler: $scheduler } = createFixture();
-        scheduler = $scheduler;
         const expected = value != null ? `<div ${name}="${value}"></div>` : '<div></div>';
-        sut = new DataAttributeAccessor(scheduler, LifecycleFlags.none, el, name);
+        sut = new DataAttributeAccessor();
 
-        sut.bind(LifecycleFlags.none);
-        sut.setValue(value, LifecycleFlags.none);
+        sut.setValue(value, LifecycleFlags.none, el, name);
 
         assert.strictEqual(el.outerHTML, expected, `el.outerHTML after flush`);
       });
